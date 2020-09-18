@@ -16,7 +16,8 @@
   },
   "require": {
     "php": "~7.4",
-    "monolog/monolog": "~1.25"
+    "monolog/monolog": "~1.25",
+    "symfony/http-client": "~5.1"
   },
   "require-dev": {
     "ext-json": "*",

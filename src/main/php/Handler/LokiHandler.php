@@ -33,7 +33,11 @@ class LokiHandler extends AbstractProcessingHandler
     /** the list of default labels to be sent to the Loki system */
     protected array $globalLabels = [];
 
-    public function __construct(array $apiConfig, $level = Logger::DEBUG, $bubble = true)
+    /** The connection timeout in seconds */
+    protected int $timeout;
+
+
+    public function __construct(array $apiConfig, int $level = Logger::DEBUG, int $timeout = 5, bool $bubble = true)
     {
         if (!function_exists('json_encode')) {
             throw new \RuntimeException('PHP\'s json extension is required to use Monolog\'s LokiHandler');
@@ -46,6 +50,7 @@ class LokiHandler extends AbstractProcessingHandler
         if (isset($apiConfig['auth']['basic'])) {
             $this->basicAuth = (2 === count($apiConfig['auth']['basic'])) ? $apiConfig['auth']['basic'] : [];
         }
+        $this->timeout = $timeout;
     }
 
     private function getEntrypoint(string $entrypoint): string
@@ -82,14 +87,11 @@ class LokiHandler extends AbstractProcessingHandler
         curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'POST');
         curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt(
-            $ch,
-            CURLOPT_HTTPHEADER,
-            [
-                'Content-Type: application/json',
-                'Content-Length: ' . strlen($payload),
-            ]
-        );
+        curl_setopt($ch, CURLOPT_TIMEOUT, $this->timeout);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json',
+            sprintf('Content-Length: %d', strlen($payload)),
+        ]);
 
         Curl\Util::execute($ch);
     }

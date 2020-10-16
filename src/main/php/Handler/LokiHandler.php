@@ -132,7 +132,7 @@ class LokiHandler extends AbstractProcessingHandler
                 if ($chunk->isLast()) {
                     $this->responses->detach($response);
                 }
-            } catch (ExceptionInterface $e) {
+            } catch (\Throwable $e) {
                 $this->responses->detach($response);
                 error_log(sprintf("Could not push logs to Loki:\n%s", (string) $e));
             }

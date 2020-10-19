@@ -15,7 +15,7 @@ use Monolog\Formatter\FormatterInterface;
 use Monolog\Handler\AbstractProcessingHandler;
 use Monolog\Logger;
 use Symfony\Component\HttpClient\HttpClient;
-use Symfony\Contracts\HttpClient\Exception\ExceptionInterface;
+use Symfony\Contracts\HttpClient\Exception\TransportExceptionInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 class LokiHandler extends AbstractProcessingHandler
@@ -123,16 +123,23 @@ class LokiHandler extends AbstractProcessingHandler
     {
         foreach ($this->client->stream($this->responses, $blocking ? null : 0.0) as $response => $chunk) {
             try {
-                if ($chunk->isTimeout() && !$blocking) {
-                    continue;
+                if ($chunk->isTimeout()) {
+                    if ($blocking) {
+                        $response->cancel();
+                        $this->responses->detach($response);
+                        error_log("Could not push logs to Loki due to timeout");
+                    }
                 }
-                if (!$chunk->isFirst() && !$chunk->isLast()) {
-                    continue;
+                elseif ($chunk->isFirst() && $response->getStatusCode() >= 400) {
+                    $response->cancel();
+                    $this->responses->detach($response);
+                    error_log(sprintf("Could not push logs to Loki, status code:\n%d", $response->getStatusCode()));
                 }
-                if ($chunk->isLast()) {
+                elseif ($chunk->isLast()) {
                     $this->responses->detach($response);
                 }
-            } catch (\Throwable $e) {
+            } catch (TransportExceptionInterface $e) {
+                $response->cancel();
                 $this->responses->detach($response);
                 error_log(sprintf("Could not push logs to Loki:\n%s", (string) $e));
             }

@@ -121,28 +121,33 @@ class LokiHandler extends AbstractProcessingHandler
 
     private function wait(bool $blocking)
     {
-        foreach ($this->client->stream($this->responses, $blocking ? null : 0.0) as $response => $chunk) {
-            try {
-                if ($chunk->isTimeout()) {
-                    if ($blocking) {
+        try {
+            foreach ($this->client->stream($this->responses, $blocking ? null : 0.0) as $response => $chunk) {
+                try {
+                    if ($chunk->isTimeout()) {
+                        if ($blocking) {
+                            $response->cancel();
+                            $this->responses->detach($response);
+                            error_log("Could not push logs to Loki due to timeout");
+                        }
+                    }
+                    elseif ($chunk->isFirst() && $response->getStatusCode() >= 400) {
                         $response->cancel();
                         $this->responses->detach($response);
-                        error_log("Could not push logs to Loki due to timeout");
+                        error_log(sprintf("Could not push logs to Loki, status code:\n%d", $response->getStatusCode()));
                     }
-                }
-                elseif ($chunk->isFirst() && $response->getStatusCode() >= 400) {
+                    elseif ($chunk->isLast()) {
+                        $this->responses->detach($response);
+                    }
+                } catch (TransportExceptionInterface $e) {
                     $response->cancel();
                     $this->responses->detach($response);
-                    error_log(sprintf("Could not push logs to Loki, status code:\n%d", $response->getStatusCode()));
+                    error_log(sprintf("Could not push logs to Loki:\n%s", (string) $e));
                 }
-                elseif ($chunk->isLast()) {
-                    $this->responses->detach($response);
-                }
-            } catch (TransportExceptionInterface $e) {
-                $response->cancel();
-                $this->responses->detach($response);
-                error_log(sprintf("Could not push logs to Loki:\n%s", (string) $e));
             }
+        }
+        catch (TransportExceptionInterface $e) {
+            error_log(sprintf("Could not push logs to Loki:\n%s", (string)$e));
         }
     }
 }
